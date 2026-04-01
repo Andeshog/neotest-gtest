@@ -67,21 +67,29 @@ local function extract_captures(
   source,
   root
 )
-  -- Namespace definition doesn't really exist as namespace is a made up
-  -- construct in GTest used only to group tests together. We set its range
-  -- from start of first test to end of last test.
-  -- Technically a namespace can be spread across multiple files, or be
-  -- interleaving, this is rare though (I think?) so we're ignoring it.
-
   local namespaces = {}
   local tests = {}
   add_reverse_lookup(query.captures)
+
+  local source_lines = vim.split(source, "\n", { plain = true })
   local gettext = function(match, capture_name)
     local node = match[query.captures[capture_name]]
+    if type(node) == "table" then
+      node = node[1]
+    end
     if node == nil then
       error(vim.inspect({ node, match, query.captures, capture_name }))
     end
-    return vim.treesitter.get_node_text(node, source)
+    local sr, sc, er, ec = node:range()
+    if sr == er then
+      return source_lines[sr + 1]:sub(sc + 1, ec)
+    end
+    local parts = { source_lines[sr + 1]:sub(sc + 1) }
+    for i = sr + 2, er do
+      parts[#parts + 1] = source_lines[i]
+    end
+    parts[#parts + 1] = (source_lines[er + 1] or ""):sub(1, ec)
+    return table.concat(parts, "\n")
   end
 
   for _, match in query:iter_matches(root, source, nil, nil, { all = false }) do
@@ -89,7 +97,9 @@ local function extract_captures(
     local test_kind = gettext(match, "test.kind")
     local test_name = gettext(match, "test.name")
     local test_definition = match[query.captures["test.definition"]]
-
+    if type(test_definition) == "table" then
+      test_definition = test_definition[1]
+    end
     tests[#tests + 1] = {
       name = test_name,
       kind = test_kind,
@@ -124,7 +134,7 @@ local function position_id(position, parents)
   parents = vim.tbl_map(function(pos)
     return pos.name
   end, parents)
-  local elements = vim.tbl_flatten({ position.path, parents, position.name })
+  local elements = vim.iter({ position.path, parents, position.name }):flatten():totable()
   return table.concat(elements, "::")
 end
 
