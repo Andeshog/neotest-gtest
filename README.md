@@ -1,5 +1,5 @@
 # neotest-gtest
-![CI status](https://github.com/alfaix/neotest-gtest/actions/workflows/workflow.yaml/badge.svg?event=push)
+![CI status](https://github.com/Andeshog/neotest-gtest/actions/workflows/workflow.yaml/badge.svg?event=push)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 This is a [neotest] adapter for [Google Test][google-test], a popular C++ testing
