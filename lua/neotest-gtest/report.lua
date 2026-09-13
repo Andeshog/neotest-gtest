@@ -209,15 +209,19 @@ end
 
 function ReportConverter:make_neotest_results()
   local gtest_json = self:_read_gtest_json()
-  local results = {}
+  local results, unknown = {}, {}
   for _, testsuite in ipairs(gtest_json.testsuites) do
     for _, test in ipairs(testsuite.testsuite) do
       local node = self:_find_node_by_name(testsuite.name, test.name)
-      assert(node, string.format("node not found for %s.%s", testsuite.name, test.name))
-      local report = Report:new(test, node)
-      results[node:data().id] = report:to_neotest_report(self._result.output)
+      if node == nil then
+        unknown[#unknown + 1] = testsuite.name .. "." .. test.name
+      else
+        local report = Report:new(test, node)
+        results[node:data().id] = report:to_neotest_report(self._result.output)
+      end
     end
   end
+  self:_notify_if_unknown_results(unknown)
   self:_notify_if_incomplete_results(results)
   return results
 end
@@ -248,6 +252,21 @@ function ReportConverter:_find_node_by_name(namespace, name)
   )
   local node_id = table.concat({ fpath, namespace, name }, "::")
   return self._tree:get_key(node_id)
+end
+
+function ReportConverter:_notify_if_unknown_results(unknown)
+  if #unknown == 0 then
+    return
+  end
+  utils.schedule_notify(
+    string.format(
+      "%s ran %d test(s) with no position in the source tree (treesitter could not parse them?): %s",
+      self._spec.command[1],
+      #unknown,
+      table.concat(unknown, ", ")
+    ),
+    vim.log.levels.WARN
+  )
 end
 
 function ReportConverter:_notify_if_incomplete_results(results)
