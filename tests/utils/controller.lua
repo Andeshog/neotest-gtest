@@ -108,6 +108,7 @@ function TestsController:reset()
   self._specs_recorder:reset()
   self._last_results = nil
   self.ui:reset()
+  require("neotest-gtest.neotest_adapter")._reset_throttle()
 end
 
 function TestsController:configure_executables(exe2nodes)

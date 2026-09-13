@@ -77,7 +77,7 @@ function M._common_executable_for_positions(root2positions)
     local registry = GlobalRegistry:for_dir(root)
     for _, position in ipairs(positions) do
       local exe2nodes, missing = registry:find_executables(position)
-      if missing or not has_single_key(exe2nodes) then
+      if #missing > 0 or not has_single_key(exe2nodes) then
         return nil
       end
       assert(exe2nodes, "must not be nil if missing is not nil")

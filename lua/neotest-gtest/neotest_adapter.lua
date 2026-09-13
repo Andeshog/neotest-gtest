@@ -81,17 +81,25 @@ local function get_filterable_nodes(nodes)
   return flatten_nodes(vim.tbl_map(recurse, nodes))
 end
 
-local last_notified = 0
+local throttle_ms = 300
+local last_fired = { raise = 0, warn = 0 }
+
+local function throttled(kind)
+  local now = vim.uv.now()
+  if now - last_fired[kind] < throttle_ms then
+    return true
+  end
+  last_fired[kind] = now
+  return false
+end
 
 ---Notifies the user that the given nodes they tried to test are not mapped to
 ---executables and require configuration.
 ---@param node_names string[]
 local function _raise_nodes_missing_executables(node_names)
-  local now = os.time()
-  if now - last_notified < 2 then
+  if throttled("raise") then
     return
   end
-  last_notified = now
   utils.schedule_error(
     string.format(
       "Some nodes do not have a corresponding GTest executable set. Please "
@@ -99,6 +107,16 @@ local function _raise_nodes_missing_executables(node_names)
         .. "in the summary window. Nodes: %s",
       table.concat(node_names, ", ")
     )
+  )
+end
+
+local function _warn_nodes_missing_executables(node_names)
+  if throttled("warn") then
+    return
+  end
+  utils.schedule_notify(
+    string.format("Nodes missing executable: %s", table.concat(node_names, ", ")),
+    vim.log.levels.WARN
   )
 end
 
@@ -142,11 +160,12 @@ end
 ---@private
 function NeotestAdapter:_try_group_nodes_by_executable()
   local exe2node_ids, missing = executables.find_executables(self._tree)
-  if exe2node_ids == nil then
-    assert(missing, "find_executables must return nil if ok == false")
-    _raise_nodes_missing_executables(missing)
+  if #missing > 0 then
+    if next(exe2node_ids) == nil then
+      _raise_nodes_missing_executables(missing)
+    end
+    _warn_nodes_missing_executables(missing)
   end
-  assert(exe2node_ids, "find_executables must not return nil if ok == true")
 
   return vim.tbl_map(function(node_ids)
     return self:_get_nodes_by_ids(node_ids)
@@ -232,6 +251,10 @@ function NeotestAdapter:_make_strategy_for_command(command)
     program = command[1],
     args = { unpack(command, 2) },
   }
+end
+
+function NeotestAdapter._reset_throttle()
+  last_fired = { raise = 0, warn = 0 }
 end
 
 return NeotestAdapter
