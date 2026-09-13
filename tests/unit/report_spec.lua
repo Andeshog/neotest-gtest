@@ -4,6 +4,7 @@ local assert = require("luassert")
 local Report = require("neotest-gtest.report")
 local tree_utils = require("tests.utils.tree")
 local ReportSpec = require("tests.utils.report")
+local ui_mock = require("tests.utils.ui_mock")
 
 local TEST_TIMESTAMP = "2023-01-01T00:00:00Z"
 local FILENAME = "/test_one.cpp"
@@ -329,5 +330,41 @@ describe("report builder", function()
     ---@cast message string
     local expected = "/doesntexist not found"
     assert.is_not_nil(string.find(message, expected, 1, true))
+  end)
+
+  it("builder skips tests without a position and warns about them", function()
+    setup()
+    -- Same suite as a parsed test, but no TEST() in the tree: what a treesitter
+    -- parse failure in the source produces once the binary runs Suite.*
+    table.insert(
+      full_gtest_report.testsuites[1].testsuite,
+      make_gtest_report({
+        ["name"] = "Unparsed",
+        ["file"] = dirpath .. "/test_one.cpp",
+        ["classname"] = "TestOne",
+      })
+    )
+    lib.files.write(json_path, vim.json.encode(full_gtest_report))
+
+    local notifications = ui_mock.NotificationsMock:new()
+    local results = make_neotest_results()
+    notifications:revert()
+
+    assert_results_match_spec(results, {
+      [dirpath .. "/test_one.cpp::TestOne::Foo"] = {
+        name = "Foo",
+        namespace = "TestOne",
+        status = "passed",
+        summary = "Passed, Time: 0s, Timestamp: " .. TEST_TIMESTAMP,
+      },
+      [dirpath .. "/test_two.cpp::TestTwo::Bar"] = {
+        name = "Bar",
+        namespace = "TestTwo",
+        status = "passed",
+        summary = "Passed, Time: 0s, Timestamp: " .. TEST_TIMESTAMP,
+      },
+    })
+    notifications:assert_notified("TestOne.Unparsed", vim.log.levels.WARN)
+    notifications:assert_no_other_notifications()
   end)
 end)
