@@ -21,6 +21,10 @@ local function find_compile_db(file)
   end
 end
 
+local function canonical(path)
+  return vim.uv.fs_realpath(path) or path
+end
+
 local function parse_compile_db(json)
   local by_file = {}
   for _, entry in ipairs(vim.json.decode(json)) do
@@ -106,31 +110,47 @@ local function tests_in_file(node)
   return tests
 end
 
-function M.resolve_file(file, tests)
-  local db_path = find_compile_db(file)
+local function cached(cache, key, load)
+  if cache[key] == nil then
+    cache[key] = load(key)
+  end
+  return cache[key]
+end
+
+function M.resolve_file(file, tests, cache)
+  local db_path = find_compile_db(canonical(file))
   if db_path == nil then
-    return nil
+    return nil, "no compile_commands.json above " .. file
   end
-  local entry = load_compile_db(db_path)[file]
+  local entry = cached(cache.db, db_path, load_compile_db)[file]
   if entry == nil then
-    return nil
+    return nil, "not in " .. db_path
   end
-  return pick_executable(ctest_tests(entry.directory), tests, entry.target)
+  local ok, exe2tests = pcall(cached, cache.ctest, entry.directory, ctest_tests)
+  if not ok then
+    return nil, exe2tests
+  end
+  local exe = pick_executable(exe2tests, tests, entry.target)
+  if exe == nil then
+    return nil, "no binary in " .. entry.directory .. " contains its tests"
+  end
+  return exe
 end
 
 local function configure_root(adapter_id)
   local tree = neotest.state.positions(adapter_id)
   local registry = GlobalRegistry:for_dir(adapter_id:sub(#ADAPTER_PREFIX + 1))
   local mapped, unmapped = 0, {}
+  local cache = { db = {}, ctest = {} }
   for _, node in tree:iter_nodes() do
     if node:data().type == "file" then
       local file = node:data().path
-      local exe = M.resolve_file(file, tests_in_file(node))
+      local exe, reason = M.resolve_file(file, tests_in_file(node), cache)
       if exe ~= nil then
         registry:update_executable(file, exe)
         mapped = mapped + 1
       else
-        unmapped[#unmapped + 1] = file
+        unmapped[#unmapped + 1] = file .. " (" .. reason .. ")"
       end
     end
   end
