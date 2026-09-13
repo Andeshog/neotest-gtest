@@ -22,7 +22,7 @@ local function with_executable_per_node(exe2nodes)
         return convert_child_id_to_full_id(tree, child_id)
       end, nodes)
     end
-    return exe2nodes, nil
+    return exe2nodes, {}
   end
 end
 local function with_mock_executable_for_nodes(node_ids)
@@ -31,7 +31,7 @@ end
 
 local function with_executable_not_found()
   executables.find_executables = function(tree)
-    return nil, { tree:data().id }
+    return {}, { tree:data().id }
   end
 end
 
