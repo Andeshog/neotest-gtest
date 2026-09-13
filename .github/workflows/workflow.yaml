@@ -1,13 +1,13 @@
-name: neotest-gtest CI
+name: CI
+
 on:
   push:
-    branches:
-      - main
-  pull_request: ~
+    branches: [main]
+  pull_request:
+
 jobs:
   style:
-    name: style
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: JohnnyMorganz/stylua-action@v4
@@ -16,56 +16,16 @@ jobs:
           version: latest
           args: --check lua/ tests/
 
-  tests:
-    name: tests
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-22.04]
-        rev: [nightly, v0.9.1, v0.10.0]
-        gtest_tag: [main]
-        include:
-          - os: ubuntu-22.04
-            rev: nightly
-            gtest_tag: release-1.10.0
-          - os: ubuntu-22.04
-            rev: nightly
-            gtest_tag: release-1.11.0
-          - os: ubuntu-22.04
-            rev: nightly
-            gtest_tag: release-1.12.1
-          - os: ubuntu-22.04
-            rev: nightly
-            gtest_tag: v1.13.0
-          - os: ubuntu-22.04
-            rev: nightly
-            gtest_tag: v1.14.0
-          - os: ubuntu-22.04
-            rev: nightly
-            gtest_tag: main
+  test:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Prepare dependencies
+      - uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: stable
+      - name: Install tree-sitter CLI
         run: |
-          mkdir -p _neovim
-          curl -sL "https://github.com/neovim/neovim/releases/download/${{ matrix.rev }}/nvim-linux64.tar.gz" | tar xzf - --strip-components=1 -C "${PWD}/_neovim"
-          git clone --depth 1 --branch ${{ matrix.gtest_tag }} https://github.com/google/googletest ${PWD}/_googletest
-          export PLUGINS_PATH=~/.local/share/nvim/site/pack/vendor/start
-          mkdir -p $PLUGINS_PATH
-          git clone --depth 1 https://github.com/nvim-lua/plenary.nvim ${PLUGINS_PATH}/plenary.nvim
-          git clone --depth 1 https://github.com/nvim-treesitter/nvim-treesitter ${PLUGINS_PATH}/nvim-treesitter
-          git clone --depth 1 https://github.com/nvim-neotest/nvim-nio ${PLUGINS_PATH}/nvim-nio
-          git clone --depth 1 https://github.com/mfussenegger/nvim-dap ${PLUGINS_PATH}/nvim-dap
-          git clone --depth 1 https://github.com/nvim-neotest/neotest ${PLUGINS_PATH}/neotest
-          ln -s ${PLUGINS_PATH} ~/.local/share/nvim/lazy
-          export PATH="${PWD}/_neovim/bin:${PATH}"
-          export VIM="${PWD}/_neovim/share/nvim/runtime"
-          nvim --headless -c 'TSInstallSync lua cpp | quit'
-
-      - name: Run tests
-        run: |
-          export PATH="${PWD}/_neovim/bin:${PATH}"
-          export VIM="${PWD}/_neovim/share/nvim/runtime"
-          nvim --version
-          make test
+          curl -sSL https://github.com/tree-sitter/tree-sitter/releases/latest/download/tree-sitter-linux-x64.gz \
+            | gunzip > /usr/local/bin/tree-sitter && chmod +x /usr/local/bin/tree-sitter
+      - run: make test
