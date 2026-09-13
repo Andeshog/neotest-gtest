@@ -21,10 +21,9 @@ local function find_compile_db(file)
   end
 end
 
----@return table<string, {directory: string, target: string?}> file -> where it was compiled
-local function load_compile_db(path)
+local function parse_compile_db(json)
   local by_file = {}
-  for _, entry in ipairs(vim.json.decode(lib.files.read(path))) do
+  for _, entry in ipairs(vim.json.decode(json)) do
     local command = entry.command or table.concat(entry.arguments, " ")
     by_file[entry.file] = {
       directory = entry.directory,
@@ -32,6 +31,26 @@ local function load_compile_db(path)
     }
   end
   return by_file
+end
+
+---@return table<string, {directory: string, target: string?}> file -> where it was compiled
+local function load_compile_db(path)
+  return parse_compile_db(lib.files.read(path))
+end
+
+local function parse_ctest_json(json)
+  local exe2tests = {}
+  for _, test in ipairs(vim.json.decode(json).tests) do
+    local command = test.command or {}
+    for _, arg in ipairs(command) do
+      local filter = arg:match("^%-%-gtest_filter=(.*)$")
+      if filter ~= nil then
+        exe2tests[command[1]] = exe2tests[command[1]] or {}
+        exe2tests[command[1]][filter] = true
+      end
+    end
+  end
+  return exe2tests
 end
 
 ---@return table<string, table<string, boolean>> executable -> set of "Suite.Test"
@@ -43,18 +62,7 @@ local function ctest_tests(build_dir)
   if code ~= 0 then
     error("ctest --show-only failed in " .. build_dir)
   end
-  local exe2tests = {}
-  for _, test in ipairs(vim.json.decode(result.stdout).tests) do
-    local command = test.command or {}
-    for _, arg in ipairs(command) do
-      local filter = arg:match("^%-%-gtest_filter=(.*)$")
-      if filter ~= nil then
-        exe2tests[command[1]] = exe2tests[command[1]] or {}
-        exe2tests[command[1]][filter] = true
-      end
-    end
-  end
-  return exe2tests
+  return parse_ctest_json(result.stdout)
 end
 
 local function better(exe, hits, best, best_hits, target)
@@ -130,7 +138,7 @@ local function configure_root(adapter_id)
 end
 
 function M.configure_all()
-  nio.run(function()
+  return nio.run(function()
     for _, adapter_id in ipairs(neotest.state.adapter_ids()) do
       if vim.startswith(adapter_id, ADAPTER_PREFIX) then
         local mapped, unmapped = configure_root(adapter_id)
@@ -149,5 +157,9 @@ function M.configure_all()
     end
   end)
 end
+
+M._parse_compile_db = parse_compile_db
+M._parse_ctest_json = parse_ctest_json
+M._pick_executable = pick_executable
 
 return M
