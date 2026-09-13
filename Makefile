@@ -20,8 +20,8 @@ integration-test-all:
 	done
 
 integration-test: build-tests
-	nvim --headless -c "PlenaryBustedDirectory tests/integration ${PLENARY_OPTS}"
-
+	nvim --headless -u $(MINIMAL_INIT) -c "PlenaryBustedDirectory tests/integration $(PLENARY_OPTS)"
+	
 build-tests: tests/integration/cpp
 	$(MAKE) -C tests/integration/cpp build
 
