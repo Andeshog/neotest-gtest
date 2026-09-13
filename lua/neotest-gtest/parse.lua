@@ -34,11 +34,8 @@ local TREESITTER_GTEST_QUERY = vim.treesitter.query.parse(
           declarator: (identifier) @test.kind
         parameters: (
           parameter_list
-            . (comment)*
             . (parameter_declaration type: (type_identifier) !declarator) @namespace.name
-            . (comment)*
             . (parameter_declaration type: (type_identifier) !declarator) @test.name
-            . (comment)*
         )
       )
       !type
