@@ -43,7 +43,7 @@ describe("integration testsuite", function()
     state.ui.notifications:assert_no_other_notifications()
   end)
 
-  it("unconfiugred run thorws an error", function()
+  it("unconfigured run throws an error", function()
     setup()
     local id = state:mkid("test_two.cpp")
     state:verify_unconfigured({ id })
@@ -114,5 +114,31 @@ describe("with configured tree", function()
     state._specs_recorder:await_specs()
     state:assert_results_published({ all_ids[1] })
     state.ui.notifications:assert_no_other_notifications()
+  end)
+end)
+
+describe("configure all", function()
+  local ctest = require("neotest-gtest.executables.ctest")
+  it("maps every file to the executable that compiles it", function()
+    --
+    -- Setup and run configure_all to map all files to their executables.
+    --
+    setup()
+    local one, two, three =
+      state:mkid("test_one.cpp"),
+      state:mkid("test_two.cpp"),
+      state:mkid("subdirectory/test_three.cpp")
+    state:verify_unconfigured({ one, two, three })
+    ctest.configure_all().wait()
+    state:verify_configured({ [exe1] = { one, two }, [exe2] = { three } })
+    state.ui.notifications:assert_notified("mapped 3 files", vim.log.levels.INFO)
+    state.ui.notifications:assert_no_other_notifications()
+
+    --
+    -- Run all tests and verify that they are executed successfully.
+    --
+    state:run({ args = { root_id }, expected_specs = 2 })
+    state._specs_recorder:await_specs()
+    state:assert_results_published({ one, two, three })
   end)
 end)
