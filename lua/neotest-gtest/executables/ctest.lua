@@ -29,7 +29,7 @@ local function parse_compile_db(json)
   local by_file = {}
   for _, entry in ipairs(vim.json.decode(json)) do
     local command = entry.command or table.concat(entry.arguments, " ")
-    by_file[entry.file] = {
+    by_file[canonical(entry.file)] = {
       directory = entry.directory,
       target = command:match("CMakeFiles/([^/]+)%.dir/"),
     }
@@ -112,13 +112,19 @@ end
 
 local function cached(cache, key, load)
   if cache[key] == nil then
-    cache[key] = load(key)
+    local ok, value = pcall(load, key)
+    cache[key] = { ok = ok, value = value }
   end
-  return cache[key]
+  local hit = cache[key]
+  if not hit.ok then
+    error(hit.value, 0)
+  end
+  return hit.value
 end
 
 function M.resolve_file(file, tests, cache)
-  local db_path = find_compile_db(canonical(file))
+  file = canonical(file)
+  local db_path = find_compile_db(file)
   if db_path == nil then
     return nil, "no compile_commands.json above " .. file
   end
